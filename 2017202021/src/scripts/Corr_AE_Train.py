@@ -42,7 +42,9 @@ if __name__ == '__main__':
         filename = 'CXR' + imgs[i][1].replace('.dcm','')
         if uid in texts:
             _text_data.append(texts[uid])
-            _img_data.append(x+'/cxr/image/'+filename)
+            _img_data.append(x + '/cxr/image/' + filename)
+            _text_data.append(texts[uid])
+            _img_data.append(x+'/cxr/image/'+'flip_'+filename)
 
     text_data = []
     img_data = []
@@ -52,10 +54,11 @@ if __name__ == '__main__':
     t2.start()
     #通过两个线程同时对图像数据和文本数据
     while n:
-        time.sleep(10)
-    #每10秒主线程检查数据是否读取完毕
+        time.sleep(5)
+    #每5秒主线程检查数据是否读取完毕
 
     model = Corr_AE.Corr_AE(len(text_data[0]),len(img_data[0]))
-    model.train(text_data,img_data,batch_size=64,num_workers=cpu_count())
-    model.save()
+    for i in range(4):
+        model.train(text_data, img_data, batch_size=128, num_workers=cpu_count(), EPOCH=100, alpha=0.3)
+        model.save()
     #模型的训练与存储

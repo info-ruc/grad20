@@ -49,8 +49,9 @@ if __name__ == '__main__':
     read += [Preprocessing(mpx[i][1]) for i in range(len(mpx))]
     documents = [TaggedDocument(read[i],[i]) for i in range(len(read))]
 
-    model_dbow = Doc2Vec(documents=documents,dm=0,vector_size=500,workers=cpu_count(),alpha=0.025,min_alpha=0.025)
-    model_dm = Doc2Vec(documents=documents, dm=1, vector_size=500, workers=cpu_count(), alpha=0.025, min_alpha=0.025)
+    model_dbow = Doc2Vec(documents=documents,dm=0,vector_size=3000,workers=cpu_count(),alpha=0.025,min_alpha=0.025)
+    model_dm = Doc2Vec(documents=documents, dm=1, vector_size=3000, workers=cpu_count(), alpha=0.025, min_alpha=0.025)
+    model_dbow.wv.similarity()
     for epoch in range(10):
         begin = time.time()
         model_dbow.train(documents,total_examples=model_dbow.corpus_count,epochs=10)
