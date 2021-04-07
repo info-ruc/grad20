@@ -1,4 +1,5 @@
-# 有的图片可能是pdf格式，有的图片可能是jpg格式，有的可能是jpeg格式，统一转化为png格式
+# 图片pdf格式统一转化为png格式
+# 使用python的pdf2image库将pdf转换，但是耗时较长，所以开多个线程
 import os
 import time
 import re
