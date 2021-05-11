@@ -22,7 +22,6 @@ def Preprocessing(text):
     filtered = [ps.stem(w) for w in filtered]  # 提取词干
     wl = WordNetLemmatizer()
     filtered = [wl.lemmatize(w) for w  in filtered]  # 词形还原
-
     return filtered
 #对影像报告进行分词、提取词干、删除停用词和脱敏词等操作
 
@@ -37,8 +36,8 @@ def get_text_feature(texts):
             print(i,"texts of",len(texts),"texts have been loaded")
         i += 1
         result.append(model.infer_vector(document=Preprocessing(text),alpha=0.025,min_alpha=0.025,steps=100))
-    return torch.tensor(result)
-#批量将文本转化维向量并返回
+    return (torch.tensor(result)+1)/2
+#批量将文本转化为向量并返回
 
 if __name__ == '__main__':
     f = open('F:/data/cxr/report/indiana_reports.csv',encoding='utf-8')

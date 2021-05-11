@@ -1,11 +1,12 @@
 # coding:utf-8
-
+# 可视化检索系统
 from PyQt5 import QtCore,QtGui,QtWidgets
 import sys,os,threading,csv,time
 import torch.nn as nn
 import torch
 sys.path.append("..")
-from models import Corr_AE
+from models import Corr_AE,Corr_CAE
+from data_processing import img_feature_get,text_feature_get
 path = './icon/'
 data_path = ''
 texts = []
@@ -16,9 +17,13 @@ class TextLoaderThread(threading.Thread):
     def __init__(self):
         super(TextLoaderThread,self).__init__()
     def run(self):
-        global texts,data_path,n
-        reader = list(csv.reader(open(data_path+'/cxr/report/indiana_reports.csv')))[1:]
-        texts = [reader[i][6] for i in range(len(reader)) if reader[i][6] != ""]
+        global _text_data,text_data
+        text_data = text_feature_get.get_text_feature(texts=_text_data[:1000])
+        mi = text_data.min().numpy()
+        ma = text_data.max().numpy()
+        text_data = (text_data - mi) / (ma - mi)
+        #文本数据0-1归一化
+        global n
         n -= 1
 #文本信息读取线程
 
@@ -26,9 +31,9 @@ class ImgLoaderThread(threading.Thread):
     def __init__(self):
         super(ImgLoaderThread,self).__init__()
     def run(self):
-        global img_files,data_path,n
-        files = os.listdir(data_path+'/cxr/image/')
-        img_files = [data_path+'/cxr/image/'+file for file in files]
+        global _img_data,img_data,y
+        img_data = img_feature_get.get_img_feature(files=_img_data[:5000],mode=3)
+        global n
         n -= 1
 #图像信息读取线程
 
@@ -39,7 +44,7 @@ class MainUi(QtWidgets.QMainWindow):
         self.init_ui()
 
     def init_ui(self):
-        self.model = Corr_AE.Corr_AE(500, 250 * 300)
+        self.model = Corr_CAE.Corr_CAE(text_size=6000,img_size=250*250)
         self.model.load()
         #读取模型
         global path
@@ -49,6 +54,7 @@ class MainUi(QtWidgets.QMainWindow):
         self.main_layout = QtWidgets.QGridLayout()
         self.main_widget.setLayout(self.main_layout)
         #设置窗口主部件
+
 
         self.left_widget = QtWidgets.QWidget()
         self.left_widget.setObjectName('left_widget')
@@ -63,6 +69,13 @@ class MainUi(QtWidgets.QMainWindow):
         self.main_layout.addWidget(self.right_widget,0,2,12,10)
         self.setCentralWidget(self.main_widget)
         #设置窗口主部件
+
+        self.background = QtWidgets.QLabel(self)
+        self.background.setPixmap(QtGui.QPixmap(path + 'background.jpeg'))
+        self.background.setGeometry(240, 12, 1150, 776)
+        self.background.setScaledContents(True)
+        self.background.show()
+        #设置主页面背景图
 
         self.close_button = QtWidgets.QPushButton("",self)
         self.close_button.setFixedSize(30,30)
@@ -112,13 +125,25 @@ class MainUi(QtWidgets.QMainWindow):
                                   "QPushButton:hover{border-left:2px solid blue;font-weight:10;}")
         self.search.setGeometry(300,150,100,20)
         self.search.setIcon(QtGui.QIcon(path+'search.png'))
-        self.flush()
+
+
+        self.search_img = QtWidgets.QPushButton("开始检索图像",self)
+        self.search_img.setStyleSheet("QPushButton{border:none;color:black;}"
+                                  "QPushButton:hover{border-left:2px solid blue;font-weight:10;}")
+        self.search_img.setGeometry(300, 150, 150, 20)
+        self.search_img.setIcon(QtGui.QIcon(path + 'search.png'))
+
+        self.search_text = QtWidgets.QPushButton("开始检索文本", self)
+        self.search_text.setStyleSheet("QPushButton{border:none;color:black;}"
+                                      "QPushButton:hover{border-left:2px solid blue;font-weight:10;}")
+        self.search_text.setGeometry(500, 150, 150, 20)
+        self.search_text.setIcon(QtGui.QIcon(path + 'search.png'))
         #设置右侧功能组件
 
         self.left_widget.setStyleSheet("QPushButton{border:none;color:black;}"
                                        "QPushButton#left_label{border:none;border-bottom:1px solid black;font-size:18px;font-weight:700;font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;}"
                                         "QPushButton#left_button:hover{border-left:4px solid blue;font-weight:700;}"
-                                       "QWidget#left_widget{background:#9FFFEF;border-top:1px solid darkGray;border-bottom:1px solid darkGray;border-left:1px solid darkGray;border-top-left-radius:10px;border-bottom-left-radius:10px}")
+                                       "QWidget#left_widget{background:#9FFFEF;border-top:1px solid darkGray;border-bottom:1px solid darkGray;border-left:1px solid darkGray}")
 
         self.right_widget.setStyleSheet('''QWidget#right_widget{
                         color:#232C51;
@@ -126,10 +151,23 @@ class MainUi(QtWidgets.QMainWindow):
                         border-top:1px solid darkGray;
                         border-bottom:1px solid darkGray;
                         border-right:1px solid darkGray;
-                        border-top-right-radius:10px;
-                        border-bottom-right-radius:10px;}''')
+                        }''')
         self.setAttribute(QtCore.Qt.WA_TranslucentBackground)
         self.main_layout.setSpacing(0)
+
+        self.img_labels = [QtWidgets.QLabel(self) for _ in range(3)]
+        for i in range(3):
+            self.img_labels[i].setGeometry(400 + 210 * i, 300, 200, 250)
+            self.img_labels[i].setScaledContents(True)
+        self.text_labels = [QtWidgets.QLabel(self) for _ in range(3)]
+        for i in range(3):
+            self.text_labels[i].setGeometry(400 + 260 * i, 300, 250, 300)
+            self.text_labels[i].setStyleSheet("border: 1px solid black")
+            self.text_labels[i].setScaledContents(True)
+            self.text_labels[i].setWordWrap(True)
+        #设置QLabel以展示检索结果
+
+        self.flush()
 
         self.close_button.clicked.connect(lambda :self.close_window())
         self.img2text.clicked.connect(lambda :self.text_search())
@@ -138,6 +176,8 @@ class MainUi(QtWidgets.QMainWindow):
         self.open_text_file.clicked.connect(lambda: self.open_file(text=True, img=False))
         self.open_img_file.clicked.connect(lambda: self.open_file(img=True, text=False))
         self.search.clicked.connect(lambda :self.get_result())
+        self.search_text.clicked.connect(lambda :self.united_search(get_img=False))
+        self.search_img.clicked.connect(lambda :self.united_search(get_img=True))
         #设置信号槽
 
         self.setWindowFlag(QtCore.Qt.FramelessWindowHint)
@@ -145,6 +185,7 @@ class MainUi(QtWidgets.QMainWindow):
 
         self.img_file = None
         self.text_file = None
+
 
     def close_window(self):
             sys.exit()
@@ -181,18 +222,25 @@ class MainUi(QtWidgets.QMainWindow):
         self.open_img_file.close()
         self.open_text_file.close()
         self.search.close()
+        self.search_img.close()
+        self.search_text.close()
+        for label in self.img_labels:
+            label.close()
+        for label in self.text_labels:
+            label.close()
 
     def img_search(self):
         self.flush()
+        self.background.close()
         self.search.show()
         self.open_text_file.move(300,50)
-        print(self.open_img_file.statusTip())
         self.open_text_file.show()
         self.get_img = True
         self.get_text = False
     #文搜图
     def text_search(self):
         self.flush()
+        self.background.close()
         self.search.show()
         self.open_img_file.move(300,50)
         self.open_img_file.show()
@@ -201,44 +249,72 @@ class MainUi(QtWidgets.QMainWindow):
     #图搜文
     def img_text_search(self):
         self.flush()
-        self.search.show()
+        self.background.close()
+        self.search_img.show()
+        self.search_text.show()
         self.open_img_file.move(300,50)
         self.open_text_file.move(800,50)
         self.open_img_file.show()
         self.open_text_file.show()
-        self.get_img = True
-        self.get_text = True
     #联合搜索
     def get_result(self):
-        img_result = None
-        text_result = None
-        if self.get_img and self.text_file:
-            min_loss = 100
-            f = open(self.text_file)
+        for label in self.img_labels:
+            label.close()
+        for label in self.text_labels:
+            label.close()
+        global img_data,text_data,_img_data,_text_data
+        if self.get_img and self.text_file and not self.get_text:
+            f = open(self.text_file,'r')
             text = f.read()
-            for i in range(len(img_files)):
-                loss = self.model.get_similarity(self.model.predict(text=text),self.model.predict(image=img_files[i]))
-                if loss < min_loss:
-                    min_loss = loss
-                    img_result = img_files[i]
-        if self.get_text and self.img_file:
-            min_loss = 100
-            img = self.img_file
-            for i in range(len(texts)):
-                loss =self.model.get_similarity(self.model.predict(image=img), self.model.predict(text=texts[i]))
-                if loss < min_loss:
-                    min_loss = loss
-                    text_result = texts[i]
-        print(img_result)
-        print(text_result)
-
+            result = self.model.search_top3(mode=2,search_data=img_data,text=text_feature_get.get_text_feature([text])[0])
+            for i in range(3):
+                self.img_labels[i].setPixmap(QtGui.QPixmap(_img_data[result[i]]))
+                self.img_labels[i].show()
+        elif self.get_text and self.img_file and not self.get_img:
+            result = self.model.search_top3(mode=1,search_data=text_data,img=img_feature_get.get_img_feature([self.img_file],mode=3)[0])
+            for i in range(3):
+                self.text_labels[i].setText(_text_data[result[i]])
+                self.text_labels[i].show()
+    def united_search(self,get_img=True):
+        for label in self.img_labels:
+            label.close()
+        for label in self.text_labels:
+            label.close()
+        global img_data,text_data,_img_data,_text_data
+        if get_img and self.text_file:
+            f = open(self.text_file,'r')
+            text = f.read()
+            result = self.model.search_top3(mode=2,search_data=img_data,text=text_feature_get.get_text_feature([text])[0])
+            for i in range(3):
+                self.img_labels[i].setPixmap(QtGui.QPixmap(_img_data[result[i]]))
+                self.img_labels[i].show()
+        elif not get_img and self.img_file:
+            result = self.model.search_top3(mode=1,search_data=text_data,img=img_feature_get.get_img_feature([self.img_file],mode=3)[0])
+            for i in range(3):
+                self.text_labels[i].setText(_text_data[result[i]])
+                self.text_labels[i].show()
 
 def show_main_ui():
-    global path,data_path
+    global path
     path = os.path.dirname(os.path.abspath(__file__))+'/icon/'
     app = QtWidgets.QApplication(sys.argv)
     gui = MainUi()
-    data_path = input("input path of data:")
+
+    x = input("input path of data:")
+    texts = list(csv.reader(open(x + '/cxr/report/indiana_reports.csv', encoding='utf-8')))[1:]
+    global _text_data
+    _text_data = [texts[i][6] for i in range(len(texts)) if texts[i][6] != ""]
+    imgs = list(csv.reader(open(x + '/cxr/report/indiana_projections.csv', encoding='utf-8')))[1:]
+
+    global _img_data
+    _img_data = []
+    for i in range(len(imgs)):
+        filename = 'CXR' + imgs[i][1].replace('.dcm', '')
+        _img_data.append(x + '/cxr/image/' + filename)
+        _img_data.append(x + '/cxr/image/' + 'flip_' + filename)
+
+    global text_data
+    global img_data
     t1 = TextLoaderThread()
     t2 = ImgLoaderThread()
     t1.start()
@@ -246,7 +322,8 @@ def show_main_ui():
     # 通过两个线程同时对图像数据和文本数据
     while n:
         time.sleep(5)
-    # 每10秒主线程检查数据是否读取完毕
+    # 每5秒主线程检查数据是否读取完毕
+
     gui.show()
     sys.exit(app.exec_())
 
