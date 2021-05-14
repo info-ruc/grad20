@@ -5,6 +5,14 @@ import cv2 as cv
 import matplotlib.pyplot as plt
 import torch
 from albumentations import CLAHE,GaussianBlur,RandomGamma
+from tqdm import tqdm, trange
+from PIL import Image
+from torchvision import transforms
+
+transform = transforms.Compose([
+    transforms.Resize((224,224)),
+    transforms.ToTensor()
+])
 
 def img_enhance(img):
     gauss = GaussianBlur()
@@ -42,13 +50,24 @@ def img_load(file):
     return img
 
 
-def get_img_feature(files):
+def get_img_feature(files,mode):
     result = []
     i = 1
     for file in files:
         if i % 1000 == 0:
             print(i, "images of", len(files), "images have been loaded")
         i += 1
-        result.append(img_load(file))
-    return torch.tensor(result).view(-1,250*300).float()/255
+        if mode == 1 or mode == 2:
+            result.append(img_load(file))
+        elif mode == 3:
+            img = cv.cvtColor(cv.resize(cv.imread(file), (250, 250)), cv.COLOR_BGR2GRAY)
+            result.append(img)
+        else:
+            result.append(transform(Image.open(file)).numpy())
+    if mode == 1 or mode == 2:
+        return torch.tensor(result).view(-1,250*300).float()/255
+    elif mode == 3:
+        return torch.tensor(result).unsqueeze_(1).float()/255
+    else:
+        return torch.tensor(result).float()/255
 #返回250*300的图像向量

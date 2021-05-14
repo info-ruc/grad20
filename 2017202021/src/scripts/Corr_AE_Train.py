@@ -15,6 +15,10 @@ class TextLoaderThread(threading.Thread):
     def run(self):
         global _text_data,text_data
         text_data = text_feature_get.get_text_feature(texts=_text_data)
+        mi = text_data.min().numpy()
+        ma = text_data.max().numpy()
+        text_data = (text_data - mi) / (ma - mi)
+        #文本数据0-1归一化
         global n
         n -= 1
 #文本信息读取线程
@@ -24,7 +28,7 @@ class ImgLoaderThread(threading.Thread):
         super(ImgLoaderThread,self).__init__()
     def run(self):
         global _img_data,img_data
-        img_data = img_feature_get.get_img_feature(files=_img_data)
+        img_data = img_feature_get.get_img_feature(files=_img_data,mode=1)
         global n
         n -= 1
 #图像信息读取线程
@@ -58,7 +62,32 @@ if __name__ == '__main__':
     #每5秒主线程检查数据是否读取完毕
 
     model = Corr_AE.Corr_AE(len(text_data[0]),len(img_data[0]))
-    for i in range(4):
-        model.train(text_data, img_data, batch_size=128, num_workers=cpu_count(), EPOCH=100, alpha=0.3)
-        model.save()
-    #模型的训练与存储
+    x = int(input("1.model train\t2.model evaluate\n"))
+    if x == 1:
+        for i in range(3):
+            model.train(text_data, img_data, batch_size=64, num_workers=cpu_count(), EPOCH=100, alpha=0.2)
+            model.save()
+    # 模型的训练与存储
+
+    else:
+        model.load()
+        f = open('./Corr_AE_topkacc.txt', 'a')
+        f.write(str(model.GetTopkAccuracy(texts=text_data.cuda(), imgs=img_data.cuda(), k=int(0.2 * len(text_data)),
+                                          search_mode=1)))
+        f.flush()
+        f.write('\t')
+        f.write(str(model.GetTopkAccuracy(texts=text_data.cuda(), imgs=img_data.cuda(), k=int(0.2 * len(text_data)),
+                                          search_mode=2)))
+        f.flush()
+        f.write('\t')
+        for beta in [0.3, 0.5, 0.7]:
+            f.write(str(model.GetTopkAccuracy(texts=text_data.cuda(), imgs=img_data.cuda(), k=int(0.2 * len(text_data)),
+                                              search_mode=3, beta=beta)))
+            f.flush()
+            f.write('\t')
+        f.write(str(model.GetTopkAccuracy(texts=text_data.cuda(), imgs=img_data.cuda(), k=int(0.2 * len(text_data)),
+                                          search_mode=4, beta=0.5)))
+        f.flush()
+        f.write('\t')
+        f.write('\n')
+    #模型评价
